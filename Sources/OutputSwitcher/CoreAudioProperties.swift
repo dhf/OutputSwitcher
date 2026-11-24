@@ -86,6 +86,12 @@ enum CoreAudioProperties {
         if let hidden: UInt32 = value(of: id, address(kAudioDevicePropertyIsHidden), initial: 0), hidden != 0 {
             return nil
         }
+        // Devices that cannot be the default output (e.g. Microsoft Teams Audio) are not listed
+        // by the system Sound menu either.
+        let canBeDefault: UInt32 = value(
+            of: id, address(kAudioDevicePropertyDeviceCanBeDefaultDevice, scope: kAudioObjectPropertyScopeOutput), initial: 1
+        ) ?? 1
+        if canBeDefault == 0 { return nil }
         let transport: UInt32 = value(of: id, address(kAudioDevicePropertyTransportType), initial: 0) ?? 0
         return AudioOutputDevice(
             id: id, uid: uid, name: name,

@@ -28,6 +28,12 @@ struct AudioOutputDevice: Identifiable, Equatable, Sendable {
     let dataSourceName: String?
     let transport: AudioTransport
 
+    /// Placeholder id for paired devices that are not connected (so they have no CoreAudio device yet).
+    static let notConnectedID = AudioObjectID(kAudioObjectUnknown)
+
+    /// False for paired Bluetooth devices that are only known, for example AirPods in use on an iPhone.
+    var isConnected: Bool { id != Self.notConnectedID }
+
     /// Name shown to the user; the data source is more specific for built-in outputs.
     var displayName: String { dataSourceName ?? name }
 }

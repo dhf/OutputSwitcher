@@ -7,6 +7,10 @@ import Observation
 @Observable
 final class AudioDeviceManager {
     private(set) var outputs: [AudioOutputDevice] = []
+    /// Paired headphones that are not connected to this Mac (shown so they can be connected).
+    private(set) var disconnectedHeadsets: [AudioOutputDevice] = []
+    /// Bluetooth address of a headset we are connecting to; it becomes the output once it shows up.
+    private(set) var connectingAddress: String?
     private(set) var defaultID: AudioObjectID = 0
     private(set) var volume: Float = 0
     private(set) var isMuted = false
@@ -19,6 +23,11 @@ final class AudioDeviceManager {
     private(set) var listeningState = ListeningModeState.unavailable
 
     var activeDevice: AudioOutputDevice? { outputs.first { $0.id == defaultID } }
+
+    /// Connected outputs plus headsets that can be connected, in the system menu's order.
+    var displayedDevices: [AudioOutputDevice] {
+        OutputSorter.sorted(outputs + disconnectedHeadsets)
+    }
 
     /// SF Symbol for the menu bar item.
     var menuBarSymbol: String {
@@ -47,9 +56,36 @@ final class AudioDeviceManager {
     // MARK: Actions
 
     func select(_ device: AudioOutputDevice) {
+        guard device.isConnected else {
+            connect(device)
+            return
+        }
         CoreAudioProperties.setDefaultOutput(device.id)
         refresh()
         refreshAccessoryState()
+    }
+
+    /// Connects a paired headset (e.g. AirPods in use on an iPhone). When its audio device appears,
+    /// `refresh()` makes it the output.
+    private func connect(_ headset: AudioOutputDevice) {
+        guard let address = BluetoothBattery.address(fromAudioUID: headset.uid) else { return }
+        connectingAddress = address
+        BluetoothHeadsets.connect(toAddress: address)
+        Task {
+            // Give up after a while so the spinner never hangs.
+            try? await Task.sleep(for: .seconds(20))
+            if connectingAddress == address { connectingAddress = nil }
+        }
+    }
+
+    /// Switches to the headset we are connecting to as soon as it is an audio device.
+    private func completePendingConnection() {
+        guard let address = connectingAddress,
+              let device = outputs.first(where: {
+                  BluetoothBattery.address(fromAudioUID: $0.uid).map { BluetoothHeadsets.isSame($0, address) } ?? false
+              }) else { return }
+        connectingAddress = nil
+        CoreAudioProperties.setDefaultOutput(device.id)
     }
 
     func setVolume(_ newValue: Float) {
@@ -74,6 +110,7 @@ final class AudioDeviceManager {
         isMuted = CoreAudioProperties.isMuted(defaultID)
         refreshBattery()
         watchDevice(defaultID)
+        completePendingConnection()
     }
 
     /// Battery changes raise no CoreAudio event, so the popover calls this periodically.
@@ -103,6 +140,8 @@ final class AudioDeviceManager {
     /// Refreshes battery and listening mode. Called periodically while the popover is open.
     func refreshAccessoryState() {
         refreshBattery()
+        let headsets = BluetoothHeadsets.disconnected(excluding: outputs)
+        if headsets != disconnectedHeadsets { disconnectedHeadsets = headsets }
         if activeDevice?.transport == .bluetooth {
             listeningState = AirBuddyBridge.readState() ?? .unavailable
         } else {

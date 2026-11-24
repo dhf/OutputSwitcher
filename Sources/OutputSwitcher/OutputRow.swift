@@ -7,6 +7,8 @@ struct OutputRow: View {
     let symbol: String
     let isActive: Bool
     let batteryPercent: Int?
+    /// True while a paired headset is being connected to this Mac.
+    let isConnecting: Bool
     let isExpanded: Bool
     /// Non-nil when the device has options to show; called by the chevron.
     let toggleExpanded: (() -> Void)?
@@ -27,7 +29,10 @@ struct OutputRow: View {
 
                     Spacer()
 
-                    if let batteryPercent {
+                    if isConnecting {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else if let batteryPercent {
                         BatteryLabel(percent: batteryPercent)
                     }
                 }

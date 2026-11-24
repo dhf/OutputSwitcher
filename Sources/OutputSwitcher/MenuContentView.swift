@@ -22,7 +22,8 @@ struct MenuContentView: View {
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading) {
-                ForEach(manager.outputs) { device in
+                // Includes headphones in use elsewhere (e.g. on an iPhone): click to connect.
+                ForEach(manager.displayedDevices, id: \.uid) { device in
                     OutputEntry(manager: manager, device: device, isOptionsExpanded: $isOptionsExpanded)
                 }
             }

@@ -6,7 +6,13 @@ struct OutputEntry: View {
     let device: AudioOutputDevice
     @Binding var isOptionsExpanded: Bool
 
-    private var isActive: Bool { device.id == manager.defaultID }
+    private var isActive: Bool { device.isConnected && device.id == manager.defaultID }
+
+    private var isConnecting: Bool {
+        guard !device.isConnected, let address = BluetoothBattery.address(fromAudioUID: device.uid),
+              let connecting = manager.connectingAddress else { return false }
+        return BluetoothHeadsets.isSame(address, connecting)
+    }
     private var hasOptions: Bool { isActive && !manager.listeningState.supported.isEmpty }
 
     var body: some View {
@@ -16,6 +22,7 @@ struct OutputEntry: View {
                 symbol: manager.icons.symbol(for: device),
                 isActive: isActive,
                 batteryPercent: isActive ? manager.batteryPercent : nil,
+                isConnecting: isConnecting,
                 isExpanded: isOptionsExpanded,
                 toggleExpanded: hasOptions ? { withAnimation { isOptionsExpanded.toggle() } } : nil
             ) {
