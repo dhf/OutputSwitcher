@@ -11,7 +11,7 @@ Per-device icons · real volume control · AirPods battery & listening mode · l
 ![macOS 26+](https://img.shields.io/badge/macOS-26%2B-black?logo=apple&logoColor=white)
 ![Swift 6.2](https://img.shields.io/badge/Swift-6.2-F05138?logo=swift&logoColor=white)
 ![SwiftUI](https://img.shields.io/badge/UI-SwiftUI-0A84FF)
-![Tests](https://img.shields.io/badge/tests-17%20passing-30D158)
+![Tests](https://img.shields.io/badge/tests-21%20passing-30D158)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-8E8E93)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
 
@@ -40,6 +40,7 @@ OutputSwitcher replaces the system Sound menu with one that:
 | 🎧 **Distinct device icons** | AirPods Max, AirPods Pro, the headphone jack, displays, HomePods, Mac models… each gets a fitting icon. The **menu bar icon follows the active output**. |
 | 🎨 **Icon editor** | Pick any icon per device from a symbol grid, or type **any SF Symbol name**. Choices persist; "Automatic" restores the default. |
 | 🔊 **Real volume & mute** | A native slider and mute button for the active device (uses the same *virtual main volume* the volume keys use). Stays in sync when you use the keyboard. |
+| 🎵 **Who is playing?** | The header shows the **icon of the app currently playing sound** (Safari, Music, …) and the output format (**Stereo**, Mono, *n* Channels), like the system menu. Helper processes (WebKit, Chrome, Electron) are traced back to their app. |
 | 🔁 **One-click switching** | Click an output to make it the default output *and* system output device. |
 | 🔋 **Battery readout** | Percentage plus a battery glyph with an **exact fill level**: grey normally, **yellow below 30 %**, **red below 10 %**. |
 | 🎚 **AirPods listening mode** | Off · Noise Cancellation · Transparency · Adaptive, in a **collapsible panel under the device** with the **real current mode checked** (needs [AirBuddy](#airpods-listening-mode-needs-airbuddy)). |
@@ -51,7 +52,7 @@ OutputSwitcher replaces the system Sound menu with one that:
 
 ```
 ┌──────────────────────────────────────┐
-│ Sound                                │
+│ Sound                    Stereo  🧭  │   ← output format + app playing sound
 │ 🔈 ───────────●────────── 🔊         │
 │ ──────────────────────────────────── │
 │ Output                               │
@@ -149,6 +150,11 @@ Click it to open the popover.
 Click any row. The active device has the blue badge. Built-in outputs show the Mac model
 (e.g. Mac Studio), Bluetooth headphones show their product icon.
 
+### Header: format and playing app
+Top right of the popover you see the output format (*Stereo*, *Mono*, or the channel count) and the icon of
+the app that is playing sound on the active output. Hover the icon for the app's name. With several apps
+playing, up to three icons are shown. It refreshes every 2 seconds while the popover is open.
+
 ### Volume
 The slider and mute button act on the active device. Dragging the slider while muted unmutes.
 
@@ -233,6 +239,12 @@ Without AirBuddy the listening-mode panel simply does not appear. OutputSwitcher
   writes volume and mute. Property listeners keep the UI live; they hop onto the main actor immediately.
 - **Icons** - `OutputIconMapper` picks a default SF Symbol from device name, data source and transport.
   `IconStore` layers the user's overrides on top and persists them.
+- **Playing apps** - since macOS 14.2 CoreAudio exposes *process objects*. `CoreAudioProperties.outputProcesses`
+  returns the processes whose `IsRunningOutput` flag is set and whose output devices include the active one.
+  `PlayingAppResolver` maps each to a regular app: the process itself, else the app macOS holds *responsible* for
+  it (`responsibility_get_pid_responsible_for_pid`, loaded at runtime; it is how Safari's `com.apple.WebKit.GPU`
+  becomes "Safari"), else a bundle-ID prefix match. Background daemons are ignored. The format label comes from the
+  device's channel count.
 - **Volume** - uses the *virtual main volume* property, falling back to the main and per-channel scalar volume.
 - **Battery** - private `IOBluetoothDevice` battery properties, called through the Objective-C runtime and guarded
   with `responds(to:)`. The device address is derived from the CoreAudio UID.
@@ -255,16 +267,19 @@ OutputSwitcher/
 │   └── AppIcon-1024.png
 ├── Sources/OutputSwitcher/
 │   ├── App ········· OutputSwitcherApp, WindowID, MenuBarLabel, PopoverDismisser
-│   ├── Audio ······· AudioOutputDevice, AudioDeviceManager, CoreAudioProperties
+│   ├── Audio ······· AudioOutputDevice, AudioDeviceManager, CoreAudioProperties,
+│   │                  AudioProcess, PlayingApp, PlayingAppResolver, OutputFormat
 │   ├── Icons ······· OutputIconMapper, IconStore, SymbolCatalog
-│   ├── Popover ····· MenuContentView, OutputEntry, OutputRow, VolumeRow, MenuLinkRow,
-│   │                  ListeningModePanel, ListeningModeRow, BatteryLabel, BatteryIndicator
+│   ├── Popover ····· MenuContentView, SoundHeader, PlayingAppIcon, OutputEntry, OutputRow,
+│   │                  VolumeRow, MenuLinkRow, ListeningModePanel, ListeningModeRow,
+│   │                  BatteryLabel, BatteryIndicator
 │   ├── Settings ···· SettingsView, IconSettingsRow, SymbolPickerView, LaunchAtLogin,
 │   │                  SystemSettingsPane
 │   └── Accessories · BluetoothBattery, BatteryLevel, AirBuddyBridge, ListeningMode
 └── Tests/OutputSwitcherTests/
     ├── OutputIconMapperTests, IconStoreTests
-    └── BluetoothBatteryTests, AirBuddyBridgeTests
+    ├── BluetoothBatteryTests, AirBuddyBridgeTests
+    └── PlaybackInfoTests
 ```
 
 ---
@@ -273,7 +288,7 @@ OutputSwitcher/
 
 ```bash
 swift build           # debug build
-swift test            # 17 tests (Swift Testing)
+swift test            # 21 tests (Swift Testing)
 Scripts/bundle.sh     # release build + OutputSwitcher.app
 Scripts/make_icon.sh  # regenerate the app icon
 ```
@@ -284,8 +299,8 @@ Notes:
 
 - A plain `swift run` binary has no `Info.plist`, so Bluetooth/Automation features are skipped there.
   Use the bundled app to test them.
-- The unit tests cover the pure logic: icon mapping, icon persistence, battery levels, UID parsing, and AirBuddy
-  output parsing. Nothing in the test suite touches real devices.
+- The unit tests cover the pure logic: icon mapping, icon persistence, battery levels, UID parsing, AirBuddy
+  output parsing, channel-count labels and helper-to-app bundle-ID matching. Nothing in the test suite touches real devices.
 - Code style: Swift 6.2, strict concurrency, `@Observable` + `@MainActor`, modern `FormatStyle` formatting,
   no third-party dependencies.
 
