@@ -10,8 +10,7 @@ struct MenuContentView: View {
 
     var body: some View {
         VStack(alignment: .leading) {
-            Text("Sound")
-                .font(.headline)
+            SoundHeader(manager: manager)
 
             VolumeRow(manager: manager)
 
@@ -57,10 +56,14 @@ struct MenuContentView: View {
         .padding()
         .frame(width: 310)
         .task {
-            // Keep battery and listening mode fresh while the popover is on screen.
+            // Keep playback info fresh every 2 s and battery/listening mode every 10 s
+            // while the popover is on screen.
+            var tick = 0
             while !Task.isCancelled {
-                manager.refreshAccessoryState()
-                try? await Task.sleep(for: .seconds(10))
+                manager.refreshPlayback()
+                if tick.isMultiple(of: 5) { manager.refreshAccessoryState() }
+                tick += 1
+                try? await Task.sleep(for: .seconds(2))
             }
         }
     }

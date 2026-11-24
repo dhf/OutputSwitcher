@@ -128,6 +128,32 @@ enum CoreAudioProperties {
         set(id, on: system, address(kAudioHardwarePropertyDefaultSystemOutputDevice))
     }
 
+    // MARK: Playback
+
+    /// Processes that are playing sound on `deviceID` right now.
+    static func outputProcesses(on deviceID: AudioObjectID) -> [AudioProcess] {
+        let system = AudioObjectID(kAudioObjectSystemObject)
+        return objectIDs(of: system, address(kAudioHardwarePropertyProcessObjectList)).compactMap { process in
+            guard let running: UInt32 = value(of: process, address(kAudioProcessPropertyIsRunningOutput), initial: 0),
+                  running != 0,
+                  let pid: Int32 = value(of: process, address(kAudioProcessPropertyPID), initial: 0)
+            else { return nil }
+            let devices = objectIDs(of: process, address(kAudioProcessPropertyDevices, scope: kAudioObjectPropertyScopeOutput))
+            guard devices.isEmpty || devices.contains(deviceID) else { return nil }
+            return AudioProcess(pid: pid, bundleID: string(of: process, address(kAudioProcessPropertyBundleID)))
+        }
+    }
+
+    /// Number of channels of the device's current output format (2 = stereo).
+    static func outputChannelCount(of id: AudioObjectID) -> Int? {
+        let format: AudioStreamBasicDescription? = value(
+            of: id,
+            address(kAudioDevicePropertyStreamFormat, scope: kAudioObjectPropertyScopeOutput),
+            initial: AudioStreamBasicDescription()
+        )
+        return format.map { Int($0.mChannelsPerFrame) }
+    }
+
     // MARK: Volume and mute
 
     private static let output = kAudioObjectPropertyScopeOutput

@@ -12,6 +12,9 @@ final class AudioDeviceManager {
     private(set) var isMuted = false
     /// Battery of the active device, when it is a Bluetooth device that reports one.
     private(set) var batteryPercent: Int?
+    /// Apps currently playing sound on the active output.
+    private(set) var playingApps: [PlayingApp] = []
+    private(set) var outputChannelCount: Int?
     /// Listening mode of the active headset (needs AirBuddy; unavailable otherwise).
     private(set) var listeningState = ListeningModeState.unavailable
 
@@ -76,6 +79,25 @@ final class AudioDeviceManager {
     /// Battery changes raise no CoreAudio event, so the popover calls this periodically.
     func refreshBattery() {
         batteryPercent = activeDevice.flatMap(BluetoothBattery.percent(for:))
+    }
+
+    /// "Stereo", "Mono"… for the header; `nil` when unknown.
+    var outputFormatLabel: String? {
+        outputChannelCount.flatMap(OutputFormat.label(forChannelCount:))
+    }
+
+    /// Which apps play sound, and in which channel layout. CoreAudio raises no event for
+    /// the process list here, so the popover polls this while it is open.
+    func refreshPlayback() {
+        guard defaultID != 0 else {
+            if !playingApps.isEmpty { playingApps = [] }
+            outputChannelCount = nil
+            return
+        }
+        let apps = PlayingAppResolver.apps(for: CoreAudioProperties.outputProcesses(on: defaultID))
+        if apps != playingApps { playingApps = apps }
+        let channels = CoreAudioProperties.outputChannelCount(of: defaultID)
+        if channels != outputChannelCount { outputChannelCount = channels }
     }
 
     /// Refreshes battery and listening mode. Called periodically while the popover is open.
