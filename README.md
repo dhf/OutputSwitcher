@@ -13,6 +13,7 @@ Per-device icons · real volume control · AirPods battery & listening mode · l
 ![SwiftUI](https://img.shields.io/badge/UI-SwiftUI-0A84FF)
 ![Tests](https://img.shields.io/badge/tests-17%20passing-30D158)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-8E8E93)
+![License: MIT](https://img.shields.io/badge/license-MIT-blue)
 
 </div>
 
@@ -351,4 +352,4 @@ solely to talk to AirBuddy's helper.
 
 ## License
 
-No license has been chosen yet, so all rights are reserved until one is added.
+Released under the [MIT License](LICENSE). Copyright (c) 2026 Daniel Friedrich.
