@@ -11,7 +11,7 @@ Per-device icons · real volume control · AirPods battery & listening mode · l
 ![macOS 26+](https://img.shields.io/badge/macOS-26%2B-black?logo=apple&logoColor=white)
 ![Swift 6.2](https://img.shields.io/badge/Swift-6.2-F05138?logo=swift&logoColor=white)
 ![SwiftUI](https://img.shields.io/badge/UI-SwiftUI-0A84FF)
-![Tests](https://img.shields.io/badge/tests-21%20passing-30D158)
+![Tests](https://img.shields.io/badge/tests-32%20passing-30D158)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-8E8E93)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
 
@@ -40,7 +40,9 @@ OutputSwitcher replaces the system Sound menu with one that:
 | 🎧 **Distinct device icons** | AirPods Max, AirPods Pro, the headphone jack, displays, HomePods, Mac models… each gets a fitting icon. The **menu bar icon follows the active output**. |
 | 🎨 **Icon editor** | Pick any icon per device from a symbol grid, or type **any SF Symbol name**. Choices persist; "Automatic" restores the default. |
 | 🔊 **Real volume & mute** | A native slider and mute button for the active device (uses the same *virtual main volume* the volume keys use). Stays in sync when you use the keyboard. |
-| 🎵 **Who is playing?** | The header shows the **icon of the app currently playing sound** (Safari, Music, …) and the output format (**Stereo**, Mono, *n* Channels), like the system menu. Helper processes (WebKit, Chrome, Electron) are traced back to their app. |
+| 🎵 **Who is playing?** | The header shows the **icon of the app currently playing sound** (Safari, Music, …) and the output format (**Stereo**, Mono, *n* Channels), like the system menu. Helper processes (WebKit, Chrome, Electron) are traced back to their app. macOS only reports that an app keeps an output open, so a silent app can show up; the icon can be switched off in Settings. |
+| 🔌 **Reconnect headphones** | Headphones that are **in use elsewhere** (e.g. AirPods on your iPhone during a call) are listed like in the system menu; one click connects them and switches the output (needs [AirBuddy](#airpods-listening-mode-needs-airbuddy)). |
+| 📑 **Sorted like the system** | Wired outputs first (built-in, then displays/USB), then wireless, then AirPlay, alphabetical within each group. Devices that cannot be a default output (e.g. Microsoft Teams Audio) are hidden, as in the system menu. |
 | 🔁 **One-click switching** | Click an output to make it the default output *and* system output device. |
 | 🔋 **Battery readout** | Percentage plus a battery glyph with an **exact fill level**: grey normally, **yellow below 30 %**, **red below 10 %**. |
 | 🎚 **AirPods listening mode** | Off · Noise Cancellation · Transparency · Adaptive, in a **collapsible panel under the device** with the **real current mode checked** (needs [AirBuddy](#airpods-listening-mode-needs-airbuddy)). |
@@ -163,11 +165,20 @@ When the active output is a Bluetooth headset **and AirBuddy is running**, its r
 (› collapsed, ⌄ expanded). Expand it for the listening modes; the checkmark reflects the **real**
 current mode, refreshed every 10 seconds while the popover is open and one second after you change it.
 
+### Headphones in use elsewhere
+When your AirPods are playing or worn on another device (say, you switched them to your iPhone for a call),
+they are not an audio device on the Mac, so macOS would not list them as an output. OutputSwitcher lists
+nearby headsets that are in use elsewhere (a spinner shows while connecting); click one and it connects, then becomes
+the output. This relies on AirBuddy's live device feed and its *connect device* command; without AirBuddy no extra
+devices are shown. Idle headsets (for example AirPods lying in their case) are not offered.
+
 ### OutputSwitcher Settings
 Open it from the popover (**OutputSwitcher Settings…**):
 
 - **Launch OutputSwitcher at login** - registers the app as a login item. If macOS needs approval, a hint and a
   button to *Login Items* settings appear; errors are shown inline.
+- **Show the app playing sound in the header** - on by default. Turn it off to hide the app icon (and skip the
+  lookup) if a silent app keeps showing up.
 - **Device Icons** - every connected output with a **Change…** button: a grid of symbols, a field for any
   SF Symbol name (invalid names are rejected), and **Automatic** to reset.
   Devices appear while connected (AirPods once they are in use).
@@ -179,7 +190,7 @@ Open it from the popover (**OutputSwitcher Settings…**):
 | Prompt | Why | If you decline |
 |---|---|---|
 | **Bluetooth** | Reads the battery level of connected Bluetooth headphones | No battery readout; everything else works |
-| **Automation → AirBuddyHelper** | Reads/sets the AirPods listening mode through AirBuddy | No listening-mode panel; everything else works |
+| **Automation → AirBuddyHelper** | Reads/sets the AirPods listening mode and finds/connects nearby headsets through AirBuddy | No listening-mode panel and no reconnect list; everything else works |
 
 The app has **no network access, no analytics, and stores nothing except** your icon choices
 (in the app's `UserDefaults`).
@@ -211,7 +222,14 @@ tell application id "codes.rambo.AirBuddyHelper"
 end tell
 ```
 
-Without AirBuddy the listening-mode panel simply does not appear. OutputSwitcher is **not affiliated with AirBuddy**.
+The same AppleScript interface lists the headsets AirBuddy sees nearby (`live devices`, with `nearby`,
+`connected` and `audio state`) and has a `connect device` command, which OutputSwitcher uses to
+[reconnect headphones that are in use elsewhere](#headphones-in-use-elsewhere). macOS's own list of paired
+devices is not usable for that: it also contains stale pairings synced through iCloud and cannot say which
+headsets are actually in range.
+
+Without AirBuddy the listening-mode panel and the reconnect entries simply do not appear.
+OutputSwitcher is **not affiliated with AirBuddy**.
 
 **Not included:** Conversation Awareness (not exposed by AirBuddy's scripting interface) and Spatial Audio
 (it exists in the interface but is unavailable on many devices).
@@ -250,6 +268,12 @@ Without AirBuddy the listening-mode panel simply does not appear. OutputSwitcher
   with `responds(to:)`. The device address is derived from the CoreAudio UID.
   These are private APIs: if a future macOS removes them, the readout disappears and nothing else breaks.
 - **Listening mode** - `AirBuddyBridge` runs small `NSAppleScript` snippets against AirBuddy's helper.
+- **List and order** - `OutputSorter` orders devices like the system menu (wired, wireless, AirPlay; alphabetical
+  within a group). Devices whose `CanBeDefaultDevice` flag is off are skipped, which is how the system hides
+  Microsoft Teams Audio.
+- **Reconnecting** - `BluetoothHeadsets` turns AirBuddy's nearby, not-connected, in-use headsets into placeholder rows
+  (same UID CoreAudio will use later, so icon choices carry over). A click asks AirBuddy to connect; when the
+  device shows up as an audio device, `AudioDeviceManager` makes it the output.
 - **Popover** - SwiftUI's `MenuBarExtra` in `.window` style. SwiftUI cannot close it programmatically, so
   `PopoverDismisser` finds the panel by class name when a settings link opens another window.
 
@@ -268,17 +292,19 @@ OutputSwitcher/
 ├── Sources/OutputSwitcher/
 │   ├── App ········· OutputSwitcherApp, WindowID, MenuBarLabel, PopoverDismisser
 │   ├── Audio ······· AudioOutputDevice, AudioDeviceManager, CoreAudioProperties,
-│   │                  AudioProcess, PlayingApp, PlayingAppResolver, OutputFormat
+│   │                  AudioProcess, PlayingApp, PlayingAppResolver, OutputFormat,
+│   │                  OutputSorter, BluetoothHeadsets
 │   ├── Icons ······· OutputIconMapper, IconStore, SymbolCatalog
 │   ├── Popover ····· MenuContentView, SoundHeader, PlayingAppIcon, OutputEntry, OutputRow,
 │   │                  VolumeRow, MenuLinkRow, ListeningModePanel, ListeningModeRow,
 │   │                  BatteryLabel, BatteryIndicator
 │   ├── Settings ···· SettingsView, IconSettingsRow, SymbolPickerView, LaunchAtLogin,
-│   │                  SystemSettingsPane
+│   │                  SystemSettingsPane, AppSettings
 │   └── Accessories · BluetoothBattery, BatteryLevel, AirBuddyBridge, ListeningMode
 └── Tests/OutputSwitcherTests/
     ├── OutputIconMapperTests, IconStoreTests
-    ├── BluetoothBatteryTests, AirBuddyBridgeTests
+    ├── BluetoothBatteryTests, AirBuddyBridgeTests, BluetoothHeadsetsTests
+    ├── OutputSorterTests, AppSettingsTests
     └── PlaybackInfoTests
 ```
 
@@ -288,7 +314,7 @@ OutputSwitcher/
 
 ```bash
 swift build           # debug build
-swift test            # 21 tests (Swift Testing)
+swift test            # 32 tests (Swift Testing)
 Scripts/bundle.sh     # release build + OutputSwitcher.app
 Scripts/make_icon.sh  # regenerate the app icon
 ```
@@ -300,7 +326,8 @@ Notes:
 - A plain `swift run` binary has no `Info.plist`, so Bluetooth/Automation features are skipped there.
   Use the bundled app to test them.
 - The unit tests cover the pure logic: icon mapping, icon persistence, battery levels, UID parsing, AirBuddy
-  output parsing, channel-count labels and helper-to-app bundle-ID matching. Nothing in the test suite touches real devices.
+  output and nearby-headset parsing, channel-count labels, helper-to-app bundle-ID matching, device ordering and the
+  settings. Nothing in the test suite touches real devices.
 - Code style: Swift 6.2, strict concurrency, `@Observable` + `@MainActor`, modern `FormatStyle` formatting,
   no third-party dependencies.
 
@@ -341,6 +368,17 @@ Because of the private battery properties it would not pass Mac App Store review
 - [ ] **Universal binary** and a scripted `release.sh` (sign, notarize, DMG)
 - [ ] **Per-device default volume** or remembered volume when switching
 - [ ] Headphone volume for devices that expose no volume property (some HDMI/DisplayPort outputs have none)
+
+Known limitations:
+
+- **AirPlay targets are not listed.** The system menu also shows HomePods, Apple TVs and other Macs, but macOS offers
+  no usable API for third-party apps to discover or switch to them. The routing classes exist
+  (`AVOutputDeviceDiscoverySession`, `AVOutputContext`) and a discovery session can be created in a signed bundle,
+  but it reports no devices, apparently because this is reserved for Apple's own apps. For AirPlay, use the system
+  Sound menu or **Sound Settings…** (a link in the popover). The sorting already leaves room for an AirPlay group.
+- **The playing-app icon can be wrong.** CoreAudio only says that a process keeps an output open, not that it is
+  audible, so a silent Safari tab (or a call app) can show up. There is a setting to hide the icon.
+- **Reconnecting needs AirBuddy**, and I could not test it against real AirPods in use on an iPhone.
 
 Known quirks:
 
