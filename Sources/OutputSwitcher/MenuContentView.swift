@@ -3,6 +3,7 @@ import SwiftUI
 /// Popover content modelled on the system Sound menu: volume, outputs, settings links.
 struct MenuContentView: View {
     let manager: AudioDeviceManager
+    let settings: AppSettings
 
     @Environment(\.openURL) private var openURL
     @Environment(\.openWindow) private var openWindow
@@ -10,7 +11,7 @@ struct MenuContentView: View {
 
     var body: some View {
         VStack(alignment: .leading) {
-            SoundHeader(manager: manager)
+            SoundHeader(manager: manager, showPlayingApp: settings.showPlayingApp)
 
             VolumeRow(manager: manager)
 
@@ -61,7 +62,7 @@ struct MenuContentView: View {
             // while the popover is on screen.
             var tick = 0
             while !Task.isCancelled {
-                manager.refreshPlayback()
+                manager.refreshPlayback(includingApps: settings.showPlayingApp)
                 if tick.isMultiple(of: 5) { manager.refreshAccessoryState() }
                 tick += 1
                 try? await Task.sleep(for: .seconds(2))

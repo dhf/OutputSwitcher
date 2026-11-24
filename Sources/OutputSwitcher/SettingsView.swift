@@ -4,6 +4,7 @@ import SwiftUI
 struct SettingsView: View {
     let manager: AudioDeviceManager
     let launchAtLogin: LaunchAtLogin
+    @Bindable var settings: AppSettings
 
     var body: some View {
         Form {
@@ -25,6 +26,14 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
+            }
+
+            Section {
+                Toggle("Show the app playing sound in the header", isOn: $settings.showPlayingApp)
+            } header: {
+                Text("Popover")
+            } footer: {
+                Text("macOS only reports that an app keeps an audio output open, even when it is silent, so an app's icon can appear while nothing is audible. Turn this off to hide it.")
             }
 
             Section {

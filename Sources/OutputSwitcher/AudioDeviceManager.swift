@@ -125,13 +125,16 @@ final class AudioDeviceManager {
 
     /// Which apps play sound, and in which channel layout. CoreAudio raises no event for
     /// the process list here, so the popover polls this while it is open.
-    func refreshPlayback() {
+    func refreshPlayback(includingApps: Bool = true) {
         guard defaultID != 0 else {
             if !playingApps.isEmpty { playingApps = [] }
             outputChannelCount = nil
             return
         }
-        let apps = PlayingAppResolver.apps(for: CoreAudioProperties.outputProcesses(on: defaultID))
+        // Skip the process lookup entirely when the header icon is switched off.
+        let apps = includingApps
+            ? PlayingAppResolver.apps(for: CoreAudioProperties.outputProcesses(on: defaultID))
+            : []
         if apps != playingApps { playingApps = apps }
         let channels = CoreAudioProperties.outputChannelCount(of: defaultID)
         if channels != outputChannelCount { outputChannelCount = channels }
