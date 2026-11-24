@@ -26,7 +26,15 @@ final class AudioDeviceManager {
 
     /// Connected outputs plus headsets that can be connected, in the system menu's order.
     var displayedDevices: [AudioOutputDevice] {
-        OutputSorter.sorted(outputs + disconnectedHeadsets)
+        OutputSorter.sorted(outputs + disconnectedHeadsets.filter { !isConnectedOutput($0) })
+    }
+
+    /// True when a connected output has the same Bluetooth address as this placeholder row.
+    private func isConnectedOutput(_ headset: AudioOutputDevice) -> Bool {
+        guard let address = BluetoothBattery.address(fromAudioUID: headset.uid) else { return false }
+        return outputs.contains {
+            BluetoothBattery.address(fromAudioUID: $0.uid).map { BluetoothHeadsets.isSame($0, address) } ?? false
+        }
     }
 
     /// SF Symbol for the menu bar item.
@@ -108,6 +116,9 @@ final class AudioDeviceManager {
         defaultID = CoreAudioProperties.defaultOutputID()
         volume = CoreAudioProperties.volume(of: defaultID) ?? 0
         isMuted = CoreAudioProperties.isMuted(defaultID)
+        // Drop placeholder rows for headsets that just became real outputs.
+        let remaining = disconnectedHeadsets.filter { !isConnectedOutput($0) }
+        if remaining != disconnectedHeadsets { disconnectedHeadsets = remaining }
         refreshBattery()
         watchDevice(defaultID)
         completePendingConnection()
